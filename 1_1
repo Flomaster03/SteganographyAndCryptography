@@ -1,0 +1,24 @@
+package cryptography
+
+fun main() {
+    println("Task (hide, show, exit):")
+    while (true) {
+        when (readln()) {
+            "exit" -> break
+            "hide" -> {
+                println("Hiding message in image.")
+                continue
+            }
+            "show" -> {
+                println("Obtaining message from image.")
+                continue
+            }
+            else -> {
+                println("Wrong task: task")
+                continue
+            }
+        }
+    }
+    println("Bye!")
+}
+
