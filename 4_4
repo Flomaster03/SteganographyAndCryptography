@@ -1,0 +1,123 @@
+package cryptography
+
+import java.awt.Color
+import java.awt.image.BufferedImage
+import java.io.File
+import javax.imageio.ImageIO
+import kotlin.experimental.xor
+
+const val BIT_LENGTH = 8
+const val END_BORDER_LENGTH = 24
+const val DELIMITER = "000000000000000000000011"
+
+fun main() {
+    while (true) {
+        when (val task = "Task (hide, show, exit):".setInput()) {
+            "exit" -> break
+            "hide" -> hide()
+            "show" -> show()
+            else -> {
+                println("Wrong task: $task")
+                continue
+            }
+        }
+    }
+    println("Bye!")
+}
+
+//зашифровать текст в картинке
+fun hide() {
+    val imageInputFile = File("Input image file:".setInput()) //путь к исходному файлу
+    val imageOutputFile = File("Output image file:".setInput()) //путь к готовому файлу
+    val message = "Message to hide:".setInput()
+    val password = "Password:".setInput()
+    if (imageInputFile.exists()) changeImage(imageInputFile, imageOutputFile, message, password) else println("Can't read input file!")
+}
+
+//изменяется синий цвет каждого пикселя изображения, сохраняется в выходной файл
+fun changeImage(inputFile: File, outputFile: File, message: String, password: String) {
+    val image: BufferedImage = ImageIO.read(inputFile)
+    if (message.length * BIT_LENGTH + END_BORDER_LENGTH > image.height * image.width) { //если количество пикселей изображения меньше, чем символов - битов в строке
+        println("The input image is not large enough to hold this message.")
+        return
+    }
+    val encryptedMessage = encryptMessage(message.toByteArray(), password) //зашифрованная с помощью пароля исходная строка
+    var counter = 0
+    loop@ for (y in 0 until image.height) {
+        for (x in 0 until image.width) {
+            if (counter >= encryptedMessage.size) break@loop //если символы в массиве кончились
+            val color = Color(image.getRGB(x, y))
+            val b =
+                (color.blue.convertBit() + encryptedMessage[counter]).toInt(2) //склеивание байта изображения без последнего бита + бит из массива символов
+            val colorNew = Color(color.red, color.green, b)
+            image.setRGB(x, y, colorNew.rgb)
+            counter++
+        }
+    }
+    ImageIO.write(image, "png", outputFile) //запись в выходное изображение
+    println("Message saved in $outputFile image.")
+}
+
+//зашифровка исходной строки при помощи пароля + добавление разделителя (метка окончания строки)
+fun encryptMessage(message: ByteArray, password: String): CharArray {
+    val newPassword = changePassword(password, message.size)
+    return buildString {
+        for (i in message.indices) {
+            append((message[i] xor newPassword[i]).toBits()) //8-знаковая строка
+        }
+        append(DELIMITER)
+    }.toCharArray()
+}
+
+//если пароль короче, чем длина шифруемого сообщения, то длина пароля дополняется до нужной; если длиннее, чем сообщение, то он укорачивается
+fun changePassword(password: String, messageLength: Int): ByteArray {
+    return when {
+        messageLength > password.length -> {
+            buildString {
+                repeat(messageLength / password.length) {
+                    append(password)
+                }
+                append(password.substring(0, messageLength % password.length))
+            }.toByteArray()
+        }
+        messageLength < password.length -> password.substring(0, messageLength).toByteArray()
+        else -> password.toByteArray()
+    }
+}
+
+//extension функция: устанавливает в переменную строку, вводимую пользователем после распечатывания фразы
+fun String.setInput(): String = println(this).run { readln() }
+
+//extension функция: переводит десятичное число двоичное, а двоичное в строку; удаляет последний бит
+fun Int.convertBit(): String = this.toString(2).let { it.substring(0, it.length - 1) }
+
+//extension функция: переводит значение Byte в восьмизнаковый байт (с ведущими нулями, если это необходимо)
+fun Byte.toBits(): String = String.format("%08d", this.toString(2).toInt())
+
+//получение строки из изображения
+fun show() {
+    val changedImage = File("Input image file:".setInput())
+    val password = "Password:".setInput()
+    val image: BufferedImage = ImageIO.read(changedImage)
+    val listOfBits = buildString {
+        for (y in 0 until image.height) {
+            for (x in 0 until image.width) {
+                val color = Color(image.getRGB(x, y))
+                append(color.blue.toString(2).last())
+            }
+        }
+    }.split(DELIMITER)[0] //берется первая часть строки, разделителем служат 3 байта в конце сообщения
+        .chunked(BIT_LENGTH)
+        .map { it.toInt(2).toByte() }.toByteArray()
+    println("Message:\n${decryptMessage(listOfBits, password)}")
+}
+
+//дешифровка массива из байтов, полученных из картинки
+fun decryptMessage(message: ByteArray, password: String): String {
+    val newPassword = changePassword(password, message.size)
+    return buildString {
+        for (i in message.indices) {
+            append((message[i] xor newPassword[i]).toInt().toChar()) //8-знаковая строка
+        }
+    }
+}
